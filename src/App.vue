@@ -1,268 +1,348 @@
 <template>
-  <div class="page-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">MinerU Official API Workbench</p>
-        <h1>轻量前端，直接映射官方 `mineru-api` 参数</h1>
-        <p class="hero-copy">
-          面向 `docker compose -f compose.yaml --profile api up -d` 启动的官方接口。
-          页面负责批量上传、解析参数配置、结果预览与 ZIP 下载，不引入第三方任务系统。
-        </p>
-      </div>
-      <div class="hero-actions">
-        <button class="primary-btn" @click="checkServer" :disabled="checkingServer">
-          {{ checkingServer ? '检测中...' : '检测官方 API' }}
-        </button>
-        <div class="status-pill" :class="serverMeta.ok ? 'status-ok' : 'status-warn'">
-          <span>{{ serverMeta.ok ? '接口可用' : '待确认' }}</span>
-          <small>{{ serverMeta.apiBaseUrl }}</small>
+  <div class="layout-shell">
+    <aside class="sidebar" :class="{ expanded: sidebarExpanded }" @mouseenter="sidebarExpanded = true" @mouseleave="sidebarExpanded = false">
+      <div class="logo-area">
+        <div class="logo-mark">M</div>
+        <div v-if="sidebarExpanded" class="logo-copy">
+          <strong>MinerU</strong>
+          <span>Official Workbench</span>
         </div>
       </div>
-    </header>
 
-    <main class="grid">
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="section-kicker">System Config</p>
-            <h2>官方接口与解析参数</h2>
-          </div>
-          <div class="inline-actions">
-            <button class="ghost-btn" @click="resetSettings">恢复默认</button>
-            <button class="primary-btn" @click="persistSettings">保存配置</button>
-          </div>
-        </div>
-
-        <div class="form-grid">
-          <label class="field span-2">
-            <span>MinerU API 地址</span>
-            <input v-model.trim="settings.apiBaseUrl" placeholder="http://127.0.0.1:8000" />
-          </label>
-
-          <label class="field">
-            <span>后端模式</span>
-            <select v-model="settings.backend">
-              <option value="pipeline">pipeline</option>
-              <option value="vlm-auto-engine">vlm-auto-engine</option>
-              <option value="vlm-http-client">vlm-http-client</option>
-              <option value="hybrid-auto-engine">hybrid-auto-engine</option>
-              <option value="hybrid-http-client">hybrid-http-client</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>解析方法</span>
-            <select v-model="settings.parseMethod">
-              <option value="auto">auto</option>
-              <option value="txt">txt</option>
-              <option value="ocr">ocr</option>
-            </select>
-          </label>
-
-          <label class="field span-2">
-            <span>语言列表</span>
-            <input v-model.trim="settings.langListText" placeholder="ch 或 ch,en" />
-          </label>
-
-          <label class="field span-2">
-            <span>远端 VLM Server URL</span>
-            <input
-              v-model.trim="settings.serverUrl"
-              placeholder="http://127.0.0.1:30000，仅 -http-client 模式需要"
-            />
-          </label>
-
-          <label class="field">
-            <span>起始页</span>
-            <input v-model.number="settings.startPageId" type="number" min="0" />
-          </label>
-
-          <label class="field">
-            <span>结束页</span>
-            <input v-model.number="settings.endPageId" type="number" min="0" />
-          </label>
-
-          <label class="field span-2">
-            <span>输出目录</span>
-            <input v-model.trim="settings.outputDir" placeholder="./output" />
-          </label>
-        </div>
-
-        <div class="toggle-grid">
-          <label class="check-card">
-            <input v-model="settings.formulaEnable" type="checkbox" />
-            <div>
-              <strong>公式识别</strong>
-              <small>对应 `formula_enable`</small>
-            </div>
-          </label>
-          <label class="check-card">
-            <input v-model="settings.tableEnable" type="checkbox" />
-            <div>
-              <strong>表格识别</strong>
-              <small>对应 `table_enable`</small>
-            </div>
-          </label>
-          <label class="check-card">
-            <input v-model="settings.returnMd" type="checkbox" />
-            <div>
-              <strong>返回 Markdown</strong>
-              <small>对应 `return_md`</small>
-            </div>
-          </label>
-          <label class="check-card">
-            <input v-model="settings.returnMiddleJson" type="checkbox" />
-            <div>
-              <strong>返回 Middle JSON</strong>
-              <small>对应 `return_middle_json`</small>
-            </div>
-          </label>
-          <label class="check-card">
-            <input v-model="settings.returnModelOutput" type="checkbox" />
-            <div>
-              <strong>返回 Model JSON</strong>
-              <small>对应 `return_model_output`</small>
-            </div>
-          </label>
-          <label class="check-card">
-            <input v-model="settings.returnContentList" type="checkbox" />
-            <div>
-              <strong>返回 Content List</strong>
-              <small>对应 `return_content_list`</small>
-            </div>
-          </label>
-          <label class="check-card">
-            <input v-model="settings.returnImages" type="checkbox" />
-            <div>
-              <strong>返回图片</strong>
-              <small>对应 `return_images`</small>
-            </div>
-          </label>
-          <label class="check-card accent">
-            <input v-model="settings.responseFormatZip" type="checkbox" />
-            <div>
-              <strong>ZIP 响应</strong>
-              <small>启用后直接下载归档，不返回 JSON 内容</small>
-            </div>
-          </label>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="section-kicker">Batch Parse</p>
-            <h2>批量文件上传与解析</h2>
-          </div>
-          <div class="inline-actions">
-            <button class="ghost-btn" @click="clearFiles" :disabled="!selectedFiles.length">清空文件</button>
-            <button class="primary-btn" @click="submitParse" :disabled="submitting || !selectedFiles.length">
-              {{ submitting ? '解析中...' : '开始解析' }}
-            </button>
-          </div>
-        </div>
-
-        <label
-          class="dropzone"
-          @dragenter.prevent
-          @dragover.prevent
-          @drop.prevent="handleDrop"
+      <nav class="nav-menu">
+        <button
+          v-for="item in navItems"
+          :key="item.key"
+          class="nav-item"
+          :class="{ active: currentView === item.key }"
+          @click="currentView = item.key"
         >
-          <input class="visually-hidden" type="file" multiple @change="handleFileInput" />
-          <strong>拖拽 PDF / 图片到这里，或点击选择</strong>
-          <small>官方 `file_parse` 支持多文件；当前批次将合并成一次请求发送。</small>
-        </label>
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span v-if="sidebarExpanded" class="nav-label">{{ item.label }}</span>
+        </button>
+      </nav>
 
-        <ul class="file-list" v-if="selectedFiles.length">
-          <li v-for="file in selectedFiles" :key="file.key" class="file-row">
-            <div>
-              <strong>{{ file.file.name }}</strong>
-              <small>{{ formatSize(file.file.size) }}</small>
-            </div>
-            <button class="text-btn" @click="removeFile(file.key)">移除</button>
-          </li>
-        </ul>
-        <div v-else class="empty-copy">当前没有待解析文件。</div>
+      <div class="sidebar-footer">
+        <div class="version-badge">
+          <span class="version-dot"></span>
+          <span v-if="sidebarExpanded">Official API Mode</span>
+        </div>
+      </div>
+    </aside>
 
-        <p class="helper">
-          当前请求会把页面配置完整映射到官方 `/file_parse` 表单参数。若勾选 ZIP 响应，页面会直接生成下载链接并保留任务记录。
-        </p>
-      </section>
-
-      <section class="panel span-2">
-        <div class="panel-header">
-          <div>
-            <p class="section-kicker">Results</p>
-            <h2>解析任务与返回结果</h2>
+    <div class="main-area">
+      <header class="topbar">
+        <div>
+          <p class="topbar-title">{{ viewTitle.title }}</p>
+          <p class="topbar-subtitle">{{ viewTitle.subtitle }}</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="ghost-btn" @click="checkServer" :disabled="checkingServer">
+            {{ checkingServer ? '检测中...' : '检测 API' }}
+          </button>
+          <div class="status-chip" :class="serverMeta.ok ? 'ok' : 'warn'">
+            <span>{{ serverMeta.ok ? '接口可用' : '待确认' }}</span>
+            <small>{{ serverMeta.apiBaseUrl }}</small>
           </div>
         </div>
+      </header>
 
-        <div v-if="jobs.length" class="jobs">
-          <article v-for="job in jobs" :key="job.id" class="job-card">
-            <div class="job-topline">
-              <div>
-                <h3>任务 {{ job.id }}</h3>
-                <p>{{ formatTime(job.createdAt) }} · {{ job.files.join(', ') }}</p>
+      <main class="content-area">
+        <section v-if="currentView === 'home'" class="page-section">
+          <div class="hero-card">
+            <div>
+              <p class="eyebrow">Direct Official API</p>
+              <h1>批量上传、解析和结果查看，围绕官方 `mineru-api` 组织界面</h1>
+              <p class="hero-copy">
+                当前版本不做持久化，不引入第三方后端和中间件。所有任务记录只保存在浏览器内存中，适合先验证官方接口在真实使用场景下的交互方式。
+              </p>
+            </div>
+            <div class="hero-meta">
+              <div class="stat-card">
+                <span>当前接口</span>
+                <strong>{{ settings.apiBaseUrl }}</strong>
               </div>
-              <span class="job-status" :class="`job-${job.status}`">{{ statusText(job.status) }}</span>
+              <div class="stat-card">
+                <span>默认后端</span>
+                <strong>{{ settings.backend }}</strong>
+              </div>
+              <div class="stat-card">
+                <span>本轮任务数</span>
+                <strong>{{ jobs.length }}</strong>
+              </div>
             </div>
+          </div>
 
-            <div class="job-meta">
-              <span>backend: {{ job.backend }}</span>
-              <span v-if="job.version">version: {{ job.version }}</span>
-              <span>API: {{ job.apiBaseUrl }}</span>
-            </div>
+          <div class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Usage Flow</p>
+                  <h2>推荐使用顺序</h2>
+                </div>
+              </div>
+              <ol class="step-list">
+                <li>在“系统配置”里填写官方 `mineru-api` 地址，并确认接口可达。</li>
+                <li>在“解析工作台”里选择批量文件，按业务需要切换 `pipeline / vlm / hybrid`。</li>
+                <li>返回结果后，在“任务结果”里查看 Markdown、JSON、图片或直接下载 ZIP。</li>
+              </ol>
+            </article>
 
-            <p v-if="job.error" class="job-error">{{ job.error }}</p>
+            <article class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Current Config</p>
+                  <h2>当前解析策略</h2>
+                </div>
+              </div>
+              <div class="summary-list">
+                <div><span>Backend</span><strong>{{ settings.backend }}</strong></div>
+                <div><span>Parse Method</span><strong>{{ settings.parseMethod }}</strong></div>
+                <div><span>Lang List</span><strong>{{ settings.langListText }}</strong></div>
+                <div><span>Pages</span><strong>{{ settings.startPageId }} - {{ settings.endPageId }}</strong></div>
+                <div><span>公式识别</span><strong>{{ settings.formulaEnable ? '开启' : '关闭' }}</strong></div>
+                <div><span>表格识别</span><strong>{{ settings.tableEnable ? '开启' : '关闭' }}</strong></div>
+              </div>
+            </article>
+          </div>
+        </section>
 
-            <div v-if="job.type === 'zip' && job.downloadUrl" class="zip-box">
-              <p>官方接口返回 ZIP 结果，适合下载完整解析产物。</p>
-              <a class="primary-btn inline-link" :href="job.downloadUrl" :download="job.downloadName">下载结果 ZIP</a>
-            </div>
+        <section v-else-if="currentView === 'workspace'" class="page-section">
+          <div class="workspace-grid">
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Batch Upload</p>
+                  <h2>解析工作台</h2>
+                </div>
+                <div class="inline-actions">
+                  <button class="ghost-btn" @click="clearFiles" :disabled="!selectedFiles.length">清空</button>
+                  <button class="primary-btn" @click="submitParse" :disabled="submitting || !selectedFiles.length">
+                    {{ submitting ? '解析中...' : '开始解析' }}
+                  </button>
+                </div>
+              </div>
 
-            <div v-if="job.type === 'json' && job.results.length" class="result-groups">
-              <section v-for="result in job.results" :key="result.name" class="result-card">
-                <div class="result-header">
-                  <h4>{{ result.name }}</h4>
-                  <div class="view-switch">
-                    <button
-                      v-for="view in availableViews(result)"
-                      :key="view"
-                      class="switch-btn"
-                      :class="{ active: result.activeView === view }"
-                      @click="result.activeView = view"
-                    >
-                      {{ viewLabels[view] }}
-                    </button>
+              <label class="dropzone" @dragenter.prevent @dragover.prevent @drop.prevent="handleDrop">
+                <input class="visually-hidden" type="file" multiple @change="handleFileInput" />
+                <strong>拖拽 PDF / 图片文件到这里</strong>
+                <small>支持批量文件，一次请求会将所有文件提交给官方 `/file_parse`。</small>
+              </label>
+
+              <ul class="file-list" v-if="selectedFiles.length">
+                <li v-for="file in selectedFiles" :key="file.key" class="file-row">
+                  <div>
+                    <strong>{{ file.file.name }}</strong>
+                    <small>{{ formatSize(file.file.size) }}</small>
                   </div>
-                </div>
+                  <button class="text-btn" @click="removeFile(file.key)">移除</button>
+                </li>
+              </ul>
+              <div v-else class="empty-copy">当前没有待解析文件。</div>
 
-                <div v-if="result.activeView === 'md'" class="markdown-body" v-html="result.renderedMarkdown"></div>
-                <pre v-else-if="result.activeView === 'middle_json'" class="code-block">{{ stringifyPayload(result.middle_json) }}</pre>
-                <pre v-else-if="result.activeView === 'model_output'" class="code-block">{{ stringifyPayload(result.model_output) }}</pre>
-                <pre v-else-if="result.activeView === 'content_list'" class="code-block">{{ stringifyPayload(result.content_list) }}</pre>
-                <div v-else-if="result.activeView === 'images'" class="images-grid">
-                  <figure v-for="image in result.imageEntries" :key="image.name" class="image-card">
-                    <img :src="image.src" :alt="image.name" />
-                    <figcaption>{{ image.name }}</figcaption>
-                  </figure>
+              <p class="helper">如果官方接口未开启跨域，你需要把这个前端挂到 nginx 反代后再访问。</p>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Quick Config</p>
+                  <h2>任务参数概览</h2>
                 </div>
-              </section>
+                <button class="ghost-btn" @click="currentView = 'settings'">进入系统配置</button>
+              </div>
+
+              <div class="summary-list compact">
+                <div><span>API 地址</span><strong>{{ settings.apiBaseUrl }}</strong></div>
+                <div><span>Backend</span><strong>{{ settings.backend }}</strong></div>
+                <div><span>Parse Method</span><strong>{{ settings.parseMethod }}</strong></div>
+                <div><span>输出目录</span><strong>{{ settings.outputDir }}</strong></div>
+                <div><span>ZIP 响应</span><strong>{{ settings.responseFormatZip ? '开启' : '关闭' }}</strong></div>
+                <div><span>图片返回</span><strong>{{ settings.returnImages ? '开启' : '关闭' }}</strong></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section v-else-if="currentView === 'results'" class="page-section">
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">In-Memory Jobs</p>
+                <h2>任务结果</h2>
+              </div>
             </div>
 
-            <div v-else-if="job.type === 'json' && !job.error" class="empty-copy">
-              当前任务返回 JSON，但没有可展示内容。通常是返回项全部关闭，或官方接口只写出了空结果。
+            <div v-if="jobs.length" class="jobs">
+              <article v-for="job in jobs" :key="job.id" class="job-card">
+                <div class="job-topline">
+                  <div>
+                    <h3>任务 {{ job.id }}</h3>
+                    <p>{{ formatTime(job.createdAt) }} · {{ job.files.join(', ') }}</p>
+                  </div>
+                  <span class="job-status" :class="`job-${job.status}`">{{ statusText(job.status) }}</span>
+                </div>
+
+                <div class="job-meta">
+                  <span>backend: {{ job.backend }}</span>
+                  <span v-if="job.version">version: {{ job.version }}</span>
+                  <span>API: {{ job.apiBaseUrl }}</span>
+                </div>
+
+                <p v-if="job.error" class="job-error">{{ job.error }}</p>
+
+                <div v-if="job.type === 'zip' && job.downloadUrl" class="zip-box">
+                  <p>官方接口返回 ZIP 结果，适合下载完整解析产物。</p>
+                  <a class="primary-btn inline-link" :href="job.downloadUrl" :download="job.downloadName">下载结果 ZIP</a>
+                </div>
+
+                <div v-if="job.type === 'json' && job.results.length" class="result-groups">
+                  <section v-for="result in job.results" :key="result.name" class="result-card">
+                    <div class="result-header">
+                      <h4>{{ result.name }}</h4>
+                      <div class="view-switch">
+                        <button
+                          v-for="view in availableViews(result)"
+                          :key="view"
+                          class="switch-btn"
+                          :class="{ active: result.activeView === view }"
+                          @click="result.activeView = view"
+                        >
+                          {{ viewLabels[view] }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div v-if="result.activeView === 'md'" class="markdown-body" v-html="result.renderedMarkdown"></div>
+                    <pre v-else-if="result.activeView === 'middle_json'" class="code-block">{{ stringifyPayload(result.middle_json) }}</pre>
+                    <pre v-else-if="result.activeView === 'model_output'" class="code-block">{{ stringifyPayload(result.model_output) }}</pre>
+                    <pre v-else-if="result.activeView === 'content_list'" class="code-block">{{ stringifyPayload(result.content_list) }}</pre>
+                    <div v-else-if="result.activeView === 'images'" class="images-grid">
+                      <figure v-for="image in result.imageEntries" :key="image.name" class="image-card">
+                        <img :src="image.src" :alt="image.name" />
+                        <figcaption>{{ image.name }}</figcaption>
+                      </figure>
+                    </div>
+                  </section>
+                </div>
+
+                <div v-else-if="job.type === 'json' && !job.error" class="empty-copy">
+                  当前任务返回 JSON，但没有可展示内容。通常是返回项全部关闭，或官方接口只写出了空结果。
+                </div>
+              </article>
             </div>
-          </article>
-        </div>
-        <div v-else class="empty-copy">还没有解析任务。</div>
-      </section>
-    </main>
+            <div v-else class="empty-copy">还没有解析任务。</div>
+          </section>
+        </section>
+
+        <section v-else class="page-section">
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">System Settings</p>
+                <h2>官方接口与解析参数</h2>
+              </div>
+              <div class="inline-actions">
+                <button class="ghost-btn" @click="resetSettings">恢复默认</button>
+                <button class="primary-btn" @click="persistSettings">保存配置</button>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label class="field span-2">
+                <span>MinerU API 地址</span>
+                <input v-model.trim="settings.apiBaseUrl" placeholder="http://127.0.0.1:8000" />
+              </label>
+
+              <label class="field">
+                <span>后端模式</span>
+                <select v-model="settings.backend">
+                  <option value="pipeline">pipeline</option>
+                  <option value="vlm-auto-engine">vlm-auto-engine</option>
+                  <option value="vlm-http-client">vlm-http-client</option>
+                  <option value="hybrid-auto-engine">hybrid-auto-engine</option>
+                  <option value="hybrid-http-client">hybrid-http-client</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>解析方法</span>
+                <select v-model="settings.parseMethod">
+                  <option value="auto">auto</option>
+                  <option value="txt">txt</option>
+                  <option value="ocr">ocr</option>
+                </select>
+              </label>
+
+              <label class="field span-2">
+                <span>语言列表</span>
+                <input v-model.trim="settings.langListText" placeholder="ch 或 ch,en" />
+              </label>
+
+              <label class="field span-2">
+                <span>远端 VLM Server URL</span>
+                <input v-model.trim="settings.serverUrl" placeholder="http://127.0.0.1:30000，仅 -http-client 模式需要" />
+              </label>
+
+              <label class="field">
+                <span>起始页</span>
+                <input v-model.number="settings.startPageId" type="number" min="0" />
+              </label>
+
+              <label class="field">
+                <span>结束页</span>
+                <input v-model.number="settings.endPageId" type="number" min="0" />
+              </label>
+
+              <label class="field span-2">
+                <span>输出目录</span>
+                <input v-model.trim="settings.outputDir" placeholder="./output" />
+              </label>
+            </div>
+
+            <div class="toggle-grid">
+              <label class="check-card">
+                <input v-model="settings.formulaEnable" type="checkbox" />
+                <div><strong>公式识别</strong><small>对应 `formula_enable`</small></div>
+              </label>
+              <label class="check-card">
+                <input v-model="settings.tableEnable" type="checkbox" />
+                <div><strong>表格识别</strong><small>对应 `table_enable`</small></div>
+              </label>
+              <label class="check-card">
+                <input v-model="settings.returnMd" type="checkbox" />
+                <div><strong>返回 Markdown</strong><small>对应 `return_md`</small></div>
+              </label>
+              <label class="check-card">
+                <input v-model="settings.returnMiddleJson" type="checkbox" />
+                <div><strong>返回 Middle JSON</strong><small>对应 `return_middle_json`</small></div>
+              </label>
+              <label class="check-card">
+                <input v-model="settings.returnModelOutput" type="checkbox" />
+                <div><strong>返回 Model JSON</strong><small>对应 `return_model_output`</small></div>
+              </label>
+              <label class="check-card">
+                <input v-model="settings.returnContentList" type="checkbox" />
+                <div><strong>返回 Content List</strong><small>对应 `return_content_list`</small></div>
+              </label>
+              <label class="check-card">
+                <input v-model="settings.returnImages" type="checkbox" />
+                <div><strong>返回图片</strong><small>对应 `return_images`</small></div>
+              </label>
+              <label class="check-card accent">
+                <input v-model="settings.responseFormatZip" type="checkbox" />
+                <div><strong>ZIP 响应</strong><small>启用后直接下载归档，不返回 JSON 内容</small></div>
+              </label>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { marked } from 'marked'
 import { fetchServerMeta, parseFiles } from './api'
 import { loadSettings, saveSettings } from './storage'
@@ -286,6 +366,13 @@ const defaultSettings = {
   responseFormatZip: false
 }
 
+const navItems = [
+  { key: 'home', label: '首页概览', icon: '⌂' },
+  { key: 'workspace', label: '解析工作台', icon: '↑' },
+  { key: 'results', label: '任务结果', icon: '▣' },
+  { key: 'settings', label: '系统配置', icon: '⚙' }
+]
+
 const viewLabels = {
   md: 'Markdown',
   middle_json: 'Middle JSON',
@@ -303,10 +390,33 @@ const serverMeta = reactive({
   hasFileParse: false
 })
 
+const currentView = ref('home')
+const sidebarExpanded = ref(false)
 const selectedFiles = ref([])
 const jobs = ref([])
 const checkingServer = ref(false)
 const submitting = ref(false)
+
+const viewTitle = computed(() => {
+  return {
+    home: {
+      title: '首页概览',
+      subtitle: '围绕官方 MinerU API 的轻量工作台'
+    },
+    workspace: {
+      title: '解析工作台',
+      subtitle: '批量文件上传，直接提交到官方 /file_parse'
+    },
+    results: {
+      title: '任务结果',
+      subtitle: '当前浏览器会话内的解析任务与返回数据'
+    },
+    settings: {
+      title: '系统配置',
+      subtitle: '官方接口地址、后端模式、返回选项'
+    }
+  }[currentView.value]
+})
 
 function buildJobId() {
   return String(Date.now()).slice(-6)
@@ -488,6 +598,7 @@ async function submitParse() {
   }
 
   jobs.value = [job, ...jobs.value]
+  currentView.value = 'results'
   submitting.value = true
 
   try {
@@ -496,7 +607,7 @@ async function submitParse() {
     if (!response.ok) {
       throw new Error(
         response.type === 'json'
-          ? response.data.error || '官方接口返回错误。'
+          ? response.data.error || response.data.detail || '官方接口返回错误。'
           : `HTTP ${response.status}`
       )
     }

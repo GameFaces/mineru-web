@@ -1,15 +1,24 @@
 export async function fetchServerMeta(apiBaseUrl) {
-  const query = apiBaseUrl ? `?api_base_url=${encodeURIComponent(apiBaseUrl)}` : ''
-  const response = await fetch(`/api/meta${query}`)
+  const baseUrl = normalizeBaseUrl(apiBaseUrl)
+  const response = await fetch(`${baseUrl}/openapi.json`)
   const data = await response.json()
   if (!response.ok) {
-    throw new Error(data.error || 'Failed to probe MinerU API.')
+    throw new Error(data.detail || data.error || 'Failed to probe MinerU API.')
   }
-  return data
+  return {
+    ok: true,
+    apiBaseUrl: baseUrl,
+    title: data.info?.title || 'MinerU API',
+    version: data.info?.version || '',
+    hasFileParse: Boolean(data.paths?.['/file_parse']?.post)
+  }
 }
 
 export async function parseFiles(formData) {
-  const response = await fetch('/api/file-parse', {
+  const baseUrl = normalizeBaseUrl(formData.get('api_base_url'))
+  formData.delete('api_base_url')
+
+  const response = await fetch(`${baseUrl}/file_parse`, {
     method: 'POST',
     body: formData
   })
@@ -33,4 +42,12 @@ export async function parseFiles(formData) {
     type: 'json',
     data
   }
+}
+
+function normalizeBaseUrl(apiBaseUrl) {
+  const value = String(apiBaseUrl || '').trim()
+  if (!value) {
+    throw new Error('MinerU API 地址不能为空。')
+  }
+  return value.replace(/\/$/, '')
 }
